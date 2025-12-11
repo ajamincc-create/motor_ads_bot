@@ -1,107 +1,98 @@
-import logging
-import os
+import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InputFile
-from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.filters import Text
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+import os
 from dotenv import load_dotenv
-from aiohttp import web
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID"))
 
-if not BOT_TOKEN or not OWNER_CHAT_ID:
-    raise ValueError("BOT_TOKEN یا OWNER_CHAT_ID در فایل .env نیست!")
-
-logging.basicConfig(level=logging.INFO)
-
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 
-# اطلاعات آگهی را در یک دیکشنری موقت ذخیره می‌کنیم
-ads_data = {}
+class Form(StatesGroup):
+    year = State()
+    vehicle_id = State()
+    model = State()
+    additional_info = State()
 
-async def start_cmd(message: types.Message):
-    if message.from_user.id != OWNER_CHAT_ID:
-        await message.answer("شما اجازه استفاده از این ربات را ندارید.")
-        return
-    ads_data[message.from_user.id] = {}
-    await message.answer("سلام! لطفا اسم موتور را وارد کن:")
+# استارت و کیبورد اصلی
+@dp.message(commands=["start"])
+async def cmd_start(message: types.Message, state: FSMContext):
+    await state.clear()
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="شروع ثبت اطلاعات")],
+        ],
+        resize_keyboard=True
+    )
+    await message.answer("سلام! برای شروع ثبت اطلاعات روی دکمه زیر بزن.", reply_markup=kb)
 
-async def process_text(message: types.Message):
-    user_id = message.from_user.id
-    if user_id != OWNER_CHAT_ID:
-        return
+# پاسخ به دکمه شروع
+@dp.message(Text(text="شروع ثبت اطلاعات"))
+async def start_form(message: types.Message, state: FSMContext):
+    await Form.year.set()
+    await message.answer("لطفاً سال ساخت را وارد کنید:", reply_markup=ReplyKeyboardRemove())
 
-    user_ads = ads_data.get(user_id)
-    if user_ads is None:
-        await start_cmd(message)
-        return
+@dp.message(Form.year)
+async def process_year(message: types.Message, state: FSMContext):
+    await state.update_data(year=message.text)
+    await Form.next()
+    await message.answer("آیدی وسیله نقلیه را وارد کنید:")
 
-    # گرفتن داده‌ها مرحله به مرحله
-    if "name" not in user_ads:
-        user_ads["name"] = message.text
-        await message.answer("مدل موتور را وارد کن:")
-    elif "model" not in user_ads:
-        user_ads["model"] = message.text
-        await message.answer("سال ساخت موتور را وارد کن:")
-    elif "year" not in user_ads:
-        user_ads["year"] = message.text
-        await message.answer("رنگ موتور را وارد کن:")
-    elif "color" not in user_ads:
-        user_ads["color"] = message.text
-        await message.answer("لطفا عکس موتور را ارسال کن:")
-    else:
-        await message.answer("لطفا عکس موتور را ارسال کن:")
+@dp.message(Form.vehicle_id)
+async def process_vehicle_id(message: types.Message, state: FSMContext):
+    await state.update_data(vehicle_id=message.text)
+    await Form.next()
+    await message.answer("مدل وسیله نقلیه را وارد کنید:")
 
-async def process_photo(message: types.Message):
-    user_id = message.from_user.id
-    if user_id != OWNER_CHAT_ID:
-        return
+@dp.message(Form.model)
+async def process_model(message: types.Message, state: FSMContext):
+    await state.update_data(model=message.text)
+    await Form.next()
+    await message.answer("در صورت داشتن توضیحات اضافه وارد کنید یا /skip بزنید:")
 
-    user_ads = ads_data.get(user_id)
-    if not user_ads or "photo" in user_ads:
-        await message.answer("ابتدا اطلاعات متن را وارد کن.")
-        return
+@dp.message(Form.additional_info)
+async def process_additional_info(message: types.Message, state: FSMContext):
+    await state.update_data(additional_info=message.text)
+    data = await state.get_data()
+    text = (
+        f"اطلاعات ثبت شده:\n"
+        f"سال ساخت: {data['year']}\n"
+        f"آیدی: {data['vehicle_id']}\n"
+        f"مدل: {data['model']}\n"
+        f"توضیحات: {data.get('additional_info', '-')}"
+    )
+    await bot.send_message(OWNER_CHAT_ID, text)
+    await message.answer("اطلاعات شما ثبت شد ✅", reply_markup=ReplyKeyboardRemove())
+    await state.clear()
 
-    photo_file = await message.photo[-1].download()
-    user_ads["photo"] = photo_file.name
-
-    # ارسال آگهی به خودت
-    caption = f"📝 آگهی موتور:\nاسم: {user_ads['name']}\nمدل: {user_ads['model']}\nسال: {user_ads['year']}\nرنگ: {user_ads['color']}"
-    await bot.send_photo(chat_id=OWNER_CHAT_ID, photo=InputFile(user_ads["photo"]), caption=caption)
-
-    # پاک کردن داده‌های موقت
-    del ads_data[user_id]
-    await message.answer("آگهی ثبت شد! میتونی حالا فورواردش کنی.", reply_markup=ReplyKeyboardRemove())
-
-# ثبت هندلرها
-dp.message.register(start_cmd, Command(commands=["start"]))
-dp.message.register(process_text, lambda message: message.content_type == "text")
-dp.message.register(process_photo, lambda message: message.content_type == "photo")
-
-# وب سرور ساده برای Render
-async def handle(request):
-    return web.Response(text="Bot is running!")
-
-app = web.Application()
-app.add_routes([web.get("/", handle)])
+@dp.message(commands=["skip"])
+async def skip_additional_info(message: types.Message, state: FSMContext):
+    await state.update_data(additional_info="-")
+    data = await state.get_data()
+    text = (
+        f"اطلاعات ثبت شده:\n"
+        f"سال ساخت: {data['year']}\n"
+        f"آیدی: {data['vehicle_id']}\n"
+        f"مدل: {data['model']}\n"
+        f"توضیحات: -"
+    )
+    await bot.send_message(OWNER_CHAT_ID, text)
+    await message.answer("اطلاعات شما ثبت شد ✅", reply_markup=ReplyKeyboardRemove())
+    await state.clear()
 
 async def main():
-    from aiogram import asyncio
-    asyncio.create_task(dp.start_polling(bot))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', int(os.getenv("PORT", 8000)))
-    await site.start()
-    print("Bot is running with web server for Render...")
-
-    while True:
-        await asyncio.sleep(3600)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
-
