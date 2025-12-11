@@ -3,7 +3,7 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import InputFile
 from aiogram.filters import Command
-from aiogram.utils.keyboard import ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardRemove
 from dotenv import load_dotenv
 from aiohttp import web
 
@@ -104,3 +104,4 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
