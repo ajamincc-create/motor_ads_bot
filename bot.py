@@ -131,16 +131,15 @@ async def finish_photos(message: types.Message, state: FSMContext):
         await message.answer("⚠️ حداقل یک عکس الزامی است!\nلطفاً حداقل یک عکس از موتور ارسال کنید.")
         return
     
-    # ساخت متن نهایی آگهی - با عنوان جدید
+    # ساخت متن نهایی آگهی (ساده‌شده)
     ad_text = (
-        "🏍 آگهی فروش 🏍\n\n"
-        f"🏍 **مدل:** {data['model']}\n"
-        f"📅 **سال ساخت:** {data['year']}\n"
-        f"🎨 **رنگ:** {data['color']}\n"
-        f"🛣 **کارکرد:** {data['mileage']} کیلومتر\n"
-        f"📍 **محل:** {data['location']}\n"
-        f"📞 **تماس:** {data['contact']}\n\n"
-        f"👤 **ثبت کننده:** {message.from_user.full_name}\n"
+        f"🏍 مدل: {data['model']}\n"
+        f"📅 سال ساخت: {data['year']}\n"
+        f"🎨 رنگ: {data['color']}\n"
+        f"🛣 کارکرد: {data['mileage']} کیلومتر\n"
+        f"📍 محل: {data['location']}\n"
+        f"📞 تماس: {data['contact']}\n\n"
+        f"👤 ثبت کننده: {message.from_user.full_name}\n"
         f"🆔 @{message.from_user.username or 'بدون یوزرنیم'}"
     )
     
