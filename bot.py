@@ -24,7 +24,8 @@ if not BOT_TOKEN:
 if OWNER_CHAT_ID:
     OWNER_CHAT_ID = int(OWNER_CHAT_ID)
 else:
-    logger.warning("⚠️ OWNER_CHAT_ID تنظیم نشده. اطلاعات به مالک ارسال نمی‌شود.")
+    OWNER_CHAT_ID = None
+    logger.warning("⚠️ OWNER_CHAT_ID تنظیم نشده. اطلاعات فقط به کاربر نمایش داده می‌شود.")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -35,6 +36,7 @@ class Form(StatesGroup):
     model = State()
     additional_info = State()
 
+# استارت و کیبورد اصلی
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -46,57 +48,96 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
     await message.answer("سلام! برای شروع ثبت اطلاعات روی دکمه زیر بزن.", reply_markup=kb)
 
-# 🚨 **این خط مهمه: از F.text استفاده کن نه Text**
+# پاسخ به دکمه شروع
 @dp.message(F.text == "شروع ثبت اطلاعات")
 async def start_form(message: types.Message, state: FSMContext):
-    # ✅ **اصلاح اصلی: set_state به جای set**
     await state.set_state(Form.year)
-    await message.answer("لطفاً سال ساخت را وارد کنید:", reply_markup=ReplyKeyboardRemove())
+    await message.answer("🔸 **مرحله ۱ از ۴**\nلطفاً سال ساخت را وارد کنید:", 
+                         reply_markup=ReplyKeyboardRemove())
 
 @dp.message(Form.year)
 async def process_year(message: types.Message, state: FSMContext):
-    await state.update_data(year=message.text)
-    # ✅ **اصلاح: set_state به جای next**
+    year = message.text
+    await state.update_data(year=year)
     await state.set_state(Form.vehicle_id)
-    await message.answer("آیدی وسیله نقلیه را وارد کنید:")
+    
+    # نمایش فوری اطلاعات وارد شده
+    await message.answer(f"✅ سال ساخت ثبت شد: **{year}**")
+    await message.answer("🔸 **مرحله ۲ از ۴**\nآیدی وسیله نقلیه را وارد کنید:")
 
 @dp.message(Form.vehicle_id)
 async def process_vehicle_id(message: types.Message, state: FSMContext):
-    await state.update_data(vehicle_id=message.text)
-    # ✅ **اصلاح: set_state به جای next**
+    vehicle_id = message.text
+    await state.update_data(vehicle_id=vehicle_id)
     await state.set_state(Form.model)
-    await message.answer("مدل وسیله نقلیه را وارد کنید:")
+    
+    # نمایش فوری اطلاعات وارد شده
+    data = await state.get_data()
+    await message.answer(f"✅ آیدی ثبت شد: **{vehicle_id}**")
+    await message.answer(f"📋 اطلاعات فعلی:\nسال: {data['year']}\nآیدی: {vehicle_id}")
+    await message.answer("🔸 **مرحله ۳ از ۴**\nمدل وسیله نقلیه را وارد کنید:")
 
 @dp.message(Form.model)
 async def process_model(message: types.Message, state: FSMContext):
-    await state.update_data(model=message.text)
-    # ✅ **اصلاح: set_state به جای next**
+    model = message.text
+    await state.update_data(model=model)
     await state.set_state(Form.additional_info)
-    await message.answer("در صورت داشتن توضیحات اضافه وارد کنید یا /skip بزنید:")
+    
+    # نمایش فوری اطلاعات وارد شده
+    data = await state.get_data()
+    summary = (
+        f"📋 اطلاعات تا اینجا:\n"
+        f"• سال: {data['year']}\n"
+        f"• آیدی: {data['vehicle_id']}\n"
+        f"• مدل: {model}"
+    )
+    await message.answer(summary)
+    await message.answer("🔸 **مرحله ۴ از ۴**\nدر صورت داشتن توضیحات اضافه وارد کنید یا /skip بزنید:")
 
 @dp.message(Form.additional_info)
 async def process_additional_info(message: types.Message, state: FSMContext):
-    await state.update_data(additional_info=message.text)
+    additional_info = message.text
+    await state.update_data(additional_info=additional_info)
     data = await state.get_data()
-    text = (
-        f"اطلاعات ثبت شده:\n"
-        f"سال ساخت: {data['year']}\n"
-        f"آیدی: {data['vehicle_id']}\n"
-        f"مدل: {data['model']}\n"
-        f"توضیحات: {data.get('additional_info', '-')}"
+    
+    # متن نهایی کامل
+    final_text = (
+        "✅ **ثبت اطلاعات کامل شد**\n\n"
+        f"📋 **خلاصه اطلاعات شما:**\n"
+        f"• سال ساخت: {data['year']}\n"
+        f"• آیدی وسیله: {data['vehicle_id']}\n"
+        f"• مدل: {data['model']}\n"
+        f"• توضیحات: {data.get('additional_info', 'بدون توضیح')}\n\n"
+        "از مشارکت شما سپاسگزاریم."
+    )
+    
+    # ۱. حتماً به کاربر نمایش داده می‌شود (در چت ربات)
+    await message.answer(final_text, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    
+    # ۲. تلاش برای ارسال نسخه کامل به مالک
+    owner_text = (
+        "🚨 **اطلاعات جدید ثبت شد**\n\n"
+        f"👤 از کاربر: {message.from_user.full_name} (@{message.from_user.username or 'بدون یوزرنیم'})\n"
+        f"🆔 User ID: `{message.from_user.id}`\n\n"
+        f"📦 **محتوا:**\n"
+        f"• سال ساخت: {data['year']}\n"
+        f"• آیدی وسیله: {data['vehicle_id']}\n"
+        f"• مدل: {data['model']}\n"
+        f"• توضیحات: {data.get('additional_info', '-')}"
     )
     
     if OWNER_CHAT_ID:
         try:
-            await bot.send_message(OWNER_CHAT_ID, text)
+            await bot.send_message(OWNER_CHAT_ID, owner_text, parse_mode="Markdown")
+            await message.answer("📤 یک کپی از اطلاعات نیز برای مالک سیستم ارسال شد.")
             logger.info(f"✅ اطلاعات به مالک (ID: {OWNER_CHAT_ID}) ارسال شد.")
         except Exception as e:
+            error_msg = f"⚠️ اطلاعات ثبت شد، اما ارسال به مالک با خطا مواجه شد:\n`{e}`"
+            await message.answer(error_msg, parse_mode="Markdown")
             logger.error(f"❌ خطا در ارسال به مالک: {e}")
     else:
-        logger.info("ℹ️ OWNER_CHAT_ID تنظیم نشده. اطلاعات در لاگ ثبت شد:")
-        logger.info(text)
+        await message.answer("ℹ️ تنظیم مالک (OWNER_CHAT_ID) یافت نشد. اطلاعات فقط برای شما نمایش داده شد.")
     
-    await message.answer("اطلاعات شما ثبت شد ✅", reply_markup=ReplyKeyboardRemove())
     await state.clear()
 
 @dp.message(Command("skip"))
@@ -107,27 +148,45 @@ async def skip_additional_info(message: types.Message, state: FSMContext):
         await message.answer("شما در مرحله‌ای نیستید که بتوانید این دستور را استفاده کنید.")
         return
     
-    await state.update_data(additional_info="-")
+    await state.update_data(additional_info="بدون توضیح")
     data = await state.get_data()
-    text = (
-        f"اطلاعات ثبت شده:\n"
-        f"سال ساخت: {data['year']}\n"
-        f"آیدی: {data['vehicle_id']}\n"
-        f"مدل: {data['model']}\n"
-        f"توضیحات: -"
+    
+    # متن نهایی کامل
+    final_text = (
+        "✅ **ثبت اطلاعات کامل شد**\n\n"
+        f"📋 **خلاصه اطلاعات شما:**\n"
+        f"• سال ساخت: {data['year']}\n"
+        f"• آیدی وسیله: {data['vehicle_id']}\n"
+        f"• مدل: {data['model']}\n"
+        f"• توضیحات: بدون توضیح\n\n"
+        "از مشارکت شما سپاسگزاریم."
+    )
+    
+    # ۱. حتماً به کاربر نمایش داده می‌شود
+    await message.answer(final_text, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    
+    # ۲. تلاش برای ارسال نسخه کامل به مالک
+    owner_text = (
+        "🚨 **اطلاعات جدید ثبت شد**\n\n"
+        f"👤 از کاربر: {message.from_user.full_name} (@{message.from_user.username or 'بدون یوزرنیم'})\n"
+        f"🆔 User ID: `{message.from_user.id}`\n\n"
+        f"📦 **محتوا:**\n"
+        f"• سال ساخت: {data['year']}\n"
+        f"• آیدی وسیله: {data['vehicle_id']}\n"
+        f"• مدل: {data['model']}\n"
+        f"• توضیحات: -"
     )
     
     if OWNER_CHAT_ID:
         try:
-            await bot.send_message(OWNER_CHAT_ID, text)
+            await bot.send_message(OWNER_CHAT_ID, owner_text, parse_mode="Markdown")
+            await message.answer("📤 یک کپی از اطلاعات نیز برای مالک سیستم ارسال شد.")
             logger.info(f"✅ اطلاعات به مالک (ID: {OWNER_CHAT_ID}) ارسال شد.")
         except Exception as e:
+            error_msg = f"⚠️ اطلاعات ثبت شد، اما ارسال به مالک با خطا مواجه شد:\n`{e}`"
+            await message.answer(error_msg, parse_mode="Markdown")
             logger.error(f"❌ خطا در ارسال به مالک: {e}")
-    else:
-        logger.info("ℹ️ OWNER_CHAT_ID تنظیم نشده. اطلاعات در لاگ ثبت شد:")
-        logger.info(text)
     
-    await message.answer("اطلاعات شما ثبت شد ✅", reply_markup=ReplyKeyboardRemove())
     await state.clear()
 
 async def main():
