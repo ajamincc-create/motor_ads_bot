@@ -35,7 +35,6 @@ class Form(StatesGroup):
     model = State()
     additional_info = State()
 
-# استارت و کیبورد اصلی
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -47,31 +46,31 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
     await message.answer("سلام! برای شروع ثبت اطلاعات روی دکمه زیر بزن.", reply_markup=kb)
 
-# پاسخ به دکمه شروع - CORRECTED LINE
+# 🚨 **این خط مهمه: از F.text استفاده کن نه Text**
 @dp.message(F.text == "شروع ثبت اطلاعات")
 async def start_form(message: types.Message, state: FSMContext):
-    # FIX: استفاده از set_state به جای set
+    # ✅ **اصلاح اصلی: set_state به جای set**
     await state.set_state(Form.year)
     await message.answer("لطفاً سال ساخت را وارد کنید:", reply_markup=ReplyKeyboardRemove())
 
 @dp.message(Form.year)
 async def process_year(message: types.Message, state: FSMContext):
     await state.update_data(year=message.text)
-    # FIX: استفاده از set_state به جای next
+    # ✅ **اصلاح: set_state به جای next**
     await state.set_state(Form.vehicle_id)
     await message.answer("آیدی وسیله نقلیه را وارد کنید:")
 
 @dp.message(Form.vehicle_id)
 async def process_vehicle_id(message: types.Message, state: FSMContext):
     await state.update_data(vehicle_id=message.text)
-    # FIX: استفاده از set_state به جای next
+    # ✅ **اصلاح: set_state به جای next**
     await state.set_state(Form.model)
     await message.answer("مدل وسیله نقلیه را وارد کنید:")
 
 @dp.message(Form.model)
 async def process_model(message: types.Message, state: FSMContext):
     await state.update_data(model=message.text)
-    # FIX: استفاده از set_state به جای next
+    # ✅ **اصلاح: set_state به جای next**
     await state.set_state(Form.additional_info)
     await message.answer("در صورت داشتن توضیحات اضافه وارد کنید یا /skip بزنید:")
 
