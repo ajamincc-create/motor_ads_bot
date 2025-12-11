@@ -1,63 +1,108 @@
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.state import StatesGroup, State
-import os
+from aiogram.fsm.state import State, StatesGroup
+from dotenv import load_dotenv
 
-# توکن و بات
+# Load environment variables
+load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID"))
+GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID"))  # گروه تلگرام که بعد از تایید ارسال میشه
+
+# Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# تعریف استیت‌ها
-class MotorForm(StatesGroup):
-    name = State()
-    model = State()
-    year = State()
-    color = State()
-    engine_cc = State()
+# Define FSM states
+class AdForm(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_model = State()
+    waiting_for_year = State()
+    waiting_for_color = State()
+    waiting_for_photo = State()
+    waiting_for_confirmation = State()
 
-# شروع ربات
-@dp.message(Command(commands=["start"]))
-async def start(message: types.Message, state: FSMContext):
-    await message.answer("سلام! اسم موتور رو وارد کن:")
-    await state.set_state(MotorForm.name)
+# Start command
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer("سلام! برای ثبت آگهی موتور، اسم موتور را وارد کنید:")
+    await state.set_state(AdForm.waiting_for_name)
 
-# دریافت اسم موتور
-@dp.message()
+# Handle motor name
+@dp.message(AdForm.waiting_for_name)
 async def process_name(message: types.Message, state: FSMContext):
-    state_name = await state.get_state()
+    await state.update_data(name=message.text)
+    await message.answer("مدل موتور را وارد کنید:")
+    await state.set_state(AdForm.waiting_for_model)
+
+# Handle model
+@dp.message(AdForm.waiting_for_model)
+async def process_model(message: types.Message, state: FSMContext):
+    await state.update_data(model=message.text)
+    await message.answer("سال ساخت موتور را وارد کنید:")
+    await state.set_state(AdForm.waiting_for_year)
+
+# Handle year
+@dp.message(AdForm.waiting_for_year)
+async def process_year(message: types.Message, state: FSMContext):
+    await state.update_data(year=message.text)
+    await message.answer("رنگ موتور را وارد کنید:")
+    await state.set_state(AdForm.waiting_for_color)
+
+# Handle color
+@dp.message(AdForm.waiting_for_color)
+async def process_color(message: types.Message, state: FSMContext):
+    await state.update_data(color=message.text)
+    await message.answer("عکس موتور را ارسال کنید:")
+    await state.set_state(AdForm.waiting_for_photo)
+
+# Handle photo
+@dp.message(AdForm.waiting_for_photo, content_types=types.ContentType.PHOTO)
+async def process_photo(message: types.Message, state: FSMContext):
+    await state.update_data(photo=message.photo[-1].file_id)
+
+    data = await state.get_data()
+    ad_text = (f"آگهی جدید ثبت شد:\n"
+               f"اسم موتور: {data['name']}\n"
+               f"مدل: {data['model']}\n"
+               f"سال ساخت: {data['year']}\n"
+               f"رنگ: {data['color']}")
     
-    if state_name == MotorForm.name.state:
-        await state.update_data(name=message.text)
-        await message.answer("مدل موتور رو وارد کن:")
-        await state.set_state(MotorForm.model)
+    # Send to owner first
+    await bot.send_photo(chat_id=OWNER_CHAT_ID, photo=data['photo'], caption=ad_text)
     
-    elif state_name == MotorForm.model.state:
-        await state.update_data(model=message.text)
-        await message.answer("سال ساخت موتور رو وارد کن:")
-        await state.set_state(MotorForm.year)
-    
-    elif state_name == MotorForm.year.state:
-        await state.update_data(year=message.text)
-        await message.answer("رنگ موتور رو وارد کن:")
-        await state.set_state(MotorForm.color)
-    
-    elif state_name == MotorForm.color.state:
-        await state.update_data(color=message.text)
-        await message.answer("حجم موتور (CC) رو وارد کن:")
-        await state.set_state(MotorForm.engine_cc)
-    
-    elif state_name == MotorForm.engine_cc.state:
-        await state.update_data(engine_cc=message.text)
+    # Ask user for confirmation
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="تایید و ارسال به گروه")]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    await message.answer("آگهی شما دریافت شد و برای بررسی ارسال شد. اگر تایید شد، می‌توانید آن را در گروه منتشر کنید.", reply_markup=keyboard)
+    await state.set_state(AdForm.waiting_for_confirmation)
+
+# Handle confirmation
+@dp.message(AdForm.waiting_for_confirmation)
+async def process_confirmation(message: types.Message, state: FSMContext):
+    if message.text == "تایید و ارسال به گروه":
         data = await state.get_data()
-        await message.answer(
-            f"اطلاعات موتور ثبت شد:\n"
-            f"اسم: {data['name']}\n"
-            f"مدل: {data['model']}\n"
-            f"سال ساخت: {data['year']}\n"
-            f"رنگ: {data['color']}\n"
-            f"حجم موتور: {data['engine_cc']}"
-        )
-        await state.clear()
+        ad_text = (f"آگهی موتور:\n"
+                   f"اسم موتور: {data['name']}\n"
+                   f"مدل: {data['model']}\n"
+                   f"سال ساخت: {data['year']}\n"
+                   f"رنگ: {data['color']}")
+        await bot.send_photo(chat_id=GROUP_CHAT_ID, photo=data['photo'], caption=ad_text)
+        await message.answer("آگهی شما در گروه منتشر شد.")
+    else:
+        await message.answer("آگهی منتشر نشد.")
+    
+    await state.clear()
+
+# Run bot
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(dp.start_polling(bot))
