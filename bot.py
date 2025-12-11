@@ -9,9 +9,11 @@ from aiogram.fsm.state import StatesGroup, State
 import os
 from dotenv import load_dotenv
 
+# تنظیم لاگ
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# بارگذاری متغیرهای محیطی
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -27,20 +29,21 @@ else:
     OWNER_CHAT_ID = None
     logger.warning("⚠️ OWNER_CHAT_ID تنظیم نشده.")
 
-# باید اینجا تعریف بشن - قبل از دکوریتورها
+# ایجاد شی‌های ربات و دیسپچر - باید اینجا باشه!
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# تعریف حالت‌های فرم
 class MotorForm(StatesGroup):
-    model = State()          # مدل موتور
-    year = State()           # سال ساخت
-    color = State()          # رنگ
-    mileage = State()        # کارکرد (کیلومتر)
-    location = State()       # محل
-    contact = State()        # آیدی یا شماره تماس
-    photos = State()         # عکس‌ها
+    model = State()
+    year = State()
+    color = State()
+    mileage = State()
+    location = State()
+    contact = State()
+    photos = State()
 
-# ---------- هندلرها ----------
+# ---------- هندلرهای ربات ----------
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -75,46 +78,49 @@ async def start_motor_form(message: types.Message, state: FSMContext):
 async def process_model(message: types.Message, state: FSMContext):
     await state.update_data(model=message.text)
     await state.set_state(MotorForm.year)
-    await message.answer(f"سال ساخت را وارد کنید (مثال: 1402، 2023):")
+    await message.answer("سال ساخت را وارد کنید (مثال: 1402، 2023):")
 
 @dp.message(MotorForm.year)
 async def process_year(message: types.Message, state: FSMContext):
     await state.update_data(year=message.text)
     await state.set_state(MotorForm.color)
-    await message.answer(f"رنگ موتور را وارد کنید (مثال: مشکی، قرمز، آبی):")
+    await message.answer("رنگ موتور را وارد کنید (مثال: مشکی، قرمز، آبی):")
 
 @dp.message(MotorForm.color)
 async def process_color(message: types.Message, state: FSMContext):
     await state.update_data(color=message.text)
     await state.set_state(MotorForm.mileage)
-    await message.answer(f"کارکرد را وارد کنید (کیلومتر - مثال: 15000):")
+    await message.answer("کارکرد را وارد کنید (کیلومتر - مثال: 15000):")
 
 @dp.message(MotorForm.mileage)
 async def process_mileage(message: types.Message, state: FSMContext):
     await state.update_data(mileage=message.text)
     await state.set_state(MotorForm.location)
-    await message.answer(f"محل را وارد کنید (شهر/منطقه - مثال: تهران، میرداماد):")
+    await message.answer("محل را وارد کنید (شهر/منطقه - مثال: تهران، میرداماد):")
 
 @dp.message(MotorForm.location)
 async def process_location(message: types.Message, state: FSMContext):
     await state.update_data(location=message.text)
     await state.set_state(MotorForm.contact)
-    await message.answer(f"شماره تماس یا آیدی تلگرام را وارد کنید:")
+    await message.answer("شماره تماس یا آیدی تلگرام را وارد کنید:")
 
 @dp.message(MotorForm.contact)
 async def process_contact(message: types.Message, state: FSMContext):
     await state.update_data(contact=message.text)
     await state.set_state(MotorForm.photos)
-    
-    await message.answer("📸 لطفاً عکس‌های موتور را ارسال کنید:\n• حداقل یک عکس الزامی است\n• می‌توانید چند عکس ارسال کنید\n• بعد از ارسال عکس‌ها، /finish را تایپ کنید\n• برای لغو: /cancel")
+    await message.answer(
+        "📸 لطفاً عکس‌های موتور را ارسال کنید:\n"
+        "• حداقل یک عکس الزامی است\n"
+        "• می‌توانید چند عکس ارسال کنید\n"
+        "• بعد از ارسال عکس‌ها، /finish را تایپ کنید\n"
+        "• برای لغو: /cancel"
+    )
 
-# دریافت عکس‌ها
 @dp.message(MotorForm.photos, F.photo)
 async def process_photos(message: types.Message, state: FSMContext):
-    photo = message.photo[-1]  # بزرگترین سایز عکس
+    photo = message.photo[-1]
     file_id = photo.file_id
     
-    # ذخیره عکس‌ها در state
     data = await state.get_data()
     photos = data.get('photos', [])
     photos.append(file_id)
@@ -123,7 +129,6 @@ async def process_photos(message: types.Message, state: FSMContext):
     count = len(photos)
     await message.answer(f"✅ عکس {count} دریافت شد\nعکس بیشتری ارسال کنید یا برای پایان: /finish")
 
-# پایان ثبت عکس‌ها و ارسال نهایی
 @dp.message(MotorForm.photos, Command("finish"))
 async def finish_photos(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -133,7 +138,7 @@ async def finish_photos(message: types.Message, state: FSMContext):
         await message.answer("⚠️ حداقل یک عکس الزامی است!\nلطفاً حداقل یک عکس از موتور ارسال کنید.")
         return
     
-    # ساخت متن نهایی آگهی
+    # ساخت متن آگهی
     ad_text = (
         "🏍 آگهی فروش 🏍\n\n"
         f"🏍 مدل: {data['model']}\n"
@@ -146,71 +151,54 @@ async def finish_photos(message: types.Message, state: FSMContext):
         f"🆔 @{message.from_user.username or 'بدون یوزرنیم'}"
     )
     
-    # پاکسازی متن از کاراکترهای مشکل‌ساز
+    # پاکسازی متن
     def clean_text(text):
-        # حذف کاراکترهای نامتعارف
-        problematic_chars = ['<', '>', '&', '`']
-        for char in problematic_chars:
+        for char in ['<', '>', '&', '`', '*', '_']:
             text = text.replace(char, '')
-        # حذف Markdown ناقص
-        text = text.replace('*', '').replace('_', '').replace('`', '')
-        # محدود کردن طول
         if len(text) > 1000:
             text = text[:1000] + "..."
         return text
     
     cleaned_text = clean_text(ad_text)
     
-    # ارسال به مالک (مدیر)
+    # ارسال به مدیر
     if OWNER_CHAT_ID:
         try:
-            # همیشه از media group استفاده می‌کنیم
             media_group = []
-            
-            # همه عکس‌ها را به آلبوم اضافه می‌کنیم
             for i, photo_id in enumerate(photos):
-                if i == 0:  # عکس اول با کپشن
+                if i == 0:
                     media_group.append(
                         InputMediaPhoto(
                             media=photo_id,
                             caption=cleaned_text,
-                            parse_mode="HTML"  # استفاده از HTML به جای Markdown
+                            parse_mode="HTML"
                         )
                     )
-                else:  # عکس‌های بعدی بدون کپشن
-                    media_group.append(
-                        InputMediaPhoto(media=photo_id)
-                    )
+                else:
+                    media_group.append(InputMediaPhoto(media=photo_id))
             
-            # ارسال آلبوم
-            await bot.send_media_group(
-                chat_id=OWNER_CHAT_ID,
-                media=media_group
-            )
-            
+            await bot.send_media_group(chat_id=OWNER_CHAT_ID, media=media_group)
             await message.answer("✅ آگهی شما با موفقیت ثبت و برای مدیر ارسال شد.\nبرای ثبت آگهی جدید روی /start کلیک کنید.")
-            logger.info(f"✅ آگهی موتور برای مالک (ID: {OWNER_CHAT_ID}) ارسال شد. {len(photos)} عکس.")
+            logger.info(f"✅ آگهی برای مالک ارسال شد. {len(photos)} عکس.")
             
         except Exception as e:
-            error_msg = f"❌ خطا در ارسال آگهی: {e}"
-            await message.answer(error_msg)
-            logger.error(f"❌ خطا در ارسال آگهی به مالک: {e}")
+            await message.answer(f"❌ خطا در ارسال آگهی: {e}")
+            logger.error(f"❌ خطا: {e}")
     else:
         await message.answer("⚠️ تنظیمات مدیر یافت نشد.")
     
     await state.clear()
 
-# دستور لغو
 @dp.message(Command("cancel"))
 async def cancel_form(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("❌ ثبت آگهی لغو شد.\nبرای شروع مجدد روی /start کلیک کنید.")
 
-# راهنمای عکس‌ها
 @dp.message(MotorForm.photos)
 async def invalid_photo_input(message: types.Message):
     await message.answer("📸 لطفاً فقط عکس ارسال کنید\nبرای پایان: /finish\nبرای لغو: /cancel")
 
+# تابع اصلی
 async def main():
     logger.info("🚀 ربات آگهی موتور در حال شروع...")
     try:
@@ -222,5 +210,6 @@ async def main():
         await bot.session.close()
         logger.info("👋 ربات متوقف شد.")
 
+# نقطه ورود برنامه
 if __name__ == "__main__":
     asyncio.run(main())
