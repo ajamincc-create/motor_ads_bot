@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: motor-ads-bot
-    env: python
-    region: frankfurt
-    buildCommand: pip install -r requirements.txt
-    startCommand: bash start.sh
-    plan: free
