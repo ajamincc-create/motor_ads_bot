@@ -1,7 +1,6 @@
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
@@ -11,7 +10,6 @@ from dotenv import load_dotenv
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_CHAT_ID = int(os.getenv("OWNER_CHAT_ID"))
-GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID"))  # گروه تلگرام که بعد از تایید ارسال میشه
 
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
@@ -24,7 +22,6 @@ class AdForm(StatesGroup):
     waiting_for_year = State()
     waiting_for_color = State()
     waiting_for_photo = State()
-    waiting_for_confirmation = State()
 
 # Start command
 @dp.message(Command("start"))
@@ -73,33 +70,9 @@ async def process_photo(message: types.Message, state: FSMContext):
                f"سال ساخت: {data['year']}\n"
                f"رنگ: {data['color']}")
     
-    # Send to owner first
+    # Send to owner only
     await bot.send_photo(chat_id=OWNER_CHAT_ID, photo=data['photo'], caption=ad_text)
-    
-    # Ask user for confirmation
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="تایید و ارسال به گروه")]],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
-    await message.answer("آگهی شما دریافت شد و برای بررسی ارسال شد. اگر تایید شد، می‌توانید آن را در گروه منتشر کنید.", reply_markup=keyboard)
-    await state.set_state(AdForm.waiting_for_confirmation)
-
-# Handle confirmation
-@dp.message(AdForm.waiting_for_confirmation)
-async def process_confirmation(message: types.Message, state: FSMContext):
-    if message.text == "تایید و ارسال به گروه":
-        data = await state.get_data()
-        ad_text = (f"آگهی موتور:\n"
-                   f"اسم موتور: {data['name']}\n"
-                   f"مدل: {data['model']}\n"
-                   f"سال ساخت: {data['year']}\n"
-                   f"رنگ: {data['color']}")
-        await bot.send_photo(chat_id=GROUP_CHAT_ID, photo=data['photo'], caption=ad_text)
-        await message.answer("آگهی شما در گروه منتشر شد.")
-    else:
-        await message.answer("آگهی منتشر نشد.")
-    
+    await message.answer("آگهی شما دریافت شد و برای بررسی ارسال شد.")
     await state.clear()
 
 # Run bot
