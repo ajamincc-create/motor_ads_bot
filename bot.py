@@ -3,14 +3,12 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-bot = Bot(token=os.getenv("BOT_TOKEN"))
-dp = Dispatcher(bot, storage=MemoryStorage())
-
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID"))
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
 
 class Form(StatesGroup):
     year = State()
@@ -52,7 +50,7 @@ async def get_docs(msg: types.Message, state: FSMContext):
 @dp.message_handler(state=Form.phone)
 async def get_phone(msg: types.Message, state: FSMContext):
     await state.update_data(phone=msg.text)
-    await msg.answer("عکس‌های موتور رو بفرست.\nهرچندتا میخوای بفرست. وقتی تموم شد بگو: پایان")
+    await msg.answer("عکس‌های موتور رو بفرست. وقتی تموم شد بگو: پایان")
     await state.update_data(photos=[])
     await Form.photos.set()
 
@@ -66,7 +64,6 @@ async def get_photos(msg: types.Message, state: FSMContext):
 @dp.message_handler(lambda msg: msg.text.lower() == "پایان", state=Form.photos)
 async def finish(msg: types.Message, state: FSMContext):
     data = await state.get_data()
-
     text = f"""
 موتور جدید 🚨
 
@@ -76,17 +73,12 @@ async def finish(msg: types.Message, state: FSMContext):
 مدارک: {data['docs']}
 تماس: {data['phone']}
 """
-
-    # ارسال متن برای مالک
     await bot.send_message(OWNER_ID, text)
-
-    # ارسال عکس‌ها
     media = []
     for p in data['photos']:
         media.append(types.InputMediaPhoto(p))
     if media:
         await bot.send_media_group(OWNER_ID, media)
-
     await msg.answer("تموم شد، برای بررسی ارسال شد 😊")
     await state.finish()
 
