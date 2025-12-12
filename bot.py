@@ -33,7 +33,7 @@ else:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# تعریف حالت‌های فرم
+# تعریف حالت‌های فرم - تغییرات اصلی: اضافه کردن State توضیحات
 class MotorForm(StatesGroup):
     model = State()
     year = State()
@@ -41,6 +41,7 @@ class MotorForm(StatesGroup):
     mileage = State()
     location = State()
     contact = State()
+    description = State()  # <-- حالت جدید برای توضیحات
     photos = State()
 
 # ---------- هندلرهای ربات ----------
@@ -107,8 +108,25 @@ async def process_location(message: types.Message, state: FSMContext):
 @dp.message(MotorForm.contact)
 async def process_contact(message: types.Message, state: FSMContext):
     await state.update_data(contact=message.text)
-    await state.set_state(MotorForm.photos)
+    await state.set_state(MotorForm.description)  # <-- تغییر: رفتن به توضیحات به جای عکس
     await message.answer(
+        "💬 توضیحات اضافی را وارد کنید (اختیاری):\n"
+        "مثال: 'سلامت کامل فنی، خط و خش جزئی، سرویس به موقع ...'\n\n"
+    )
+
+# ---------- هندلر جدید برای پردازش توضیحات ----------
+@dp.message(MotorForm.description)
+async def process_description(message: types.Message, state: FSMContext):
+    user_description = message.text.strip()
+    
+    # اگر کاربر نوشته "ندارم"، آن را ذخیره نکن یا ذخیره کن و بعداً نمایش نده
+    if user_description.lower() in ["ندارم", "no", "none", "-"]:
+        user_description = "توضیح خاصی ثبت نشده است."
+    
+    await state.update_data(description=user_description)
+    await state.set_state(MotorForm.photos)  # <-- انتقال به مرحله آپلود عکس
+    await message.answer(
+        "✅ توضیحات ذخیره شد.\n\n"
         "📸 لطفاً عکس‌های موتور را ارسال کنید:\n"
         "• حداقل یک عکس الزامی است\n"
         "• می‌توانید چند عکس ارسال کنید\n"
@@ -138,7 +156,7 @@ async def finish_photos(message: types.Message, state: FSMContext):
         await message.answer("⚠️ حداقل یک عکس الزامی است!\nلطفاً حداقل یک عکس از موتور ارسال کنید.")
         return
     
-    # ساخت متن آگهی
+    # ساخت متن آگهی - تغییرات اصلی: اضافه کردن فیلد توضیحات
     ad_text = (
         "🏍 آگهی فروش 🏍\n\n"
         f"🏍 مدل: {data['model']}\n"
@@ -146,7 +164,8 @@ async def finish_photos(message: types.Message, state: FSMContext):
         f"🎨 رنگ: {data['color']}\n"
         f"🛣 کارکرد: {data['mileage']} کیلومتر\n"
         f"📍 محل: {data['location']}\n"
-        f"📞 تماس: {data['contact']}\n\n"
+        f"📞 تماس: {data['contact']}\n"
+        f"📝 توضیحات: {data.get('description', 'ثبت نشده')}\n\n"  # <-- خط جدید برای توضیحات
         f"👤 ثبت کننده: {message.from_user.full_name}\n"
         f"🆔 @{message.from_user.username or 'بدون یوزرنیم'}"
     )
